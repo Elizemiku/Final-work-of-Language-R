@@ -1,0 +1,340 @@
+---
+title: "ME115 - Trabalho Final"
+author: '159874 - Maria Helena G. B. Reis \ 170409 - Elizabeth Borgognoni Souto '
+date: "15 de junho de 2018"
+output: pdf_document
+---
+
+```{r, include = FALSE, message = FALSE}
+library(knitr)
+opts_chunk$set(echo = FALSE, tidy = TRUE, width.cutoff= 800 , fig.align = 'center')
+```
+
+## Introdução
+
+  O Censo Escolar é um levantamento de dados estatístico-educacionais de âmbito nacional realizado todos os anos e coordenado pelo Inep. Ele é feito com a colaboração das secretarias estaduais e municipais de Educação e com a participação de todas as escolas públicas e privadas do país.
+
+  Trata-se do principal instrumento de coleta de informações da educação básica, que abrange as suas diferentes etapas e modalidades: ensino regular (educação Infantil e ensinos fundamental e médio), educação especial e educação de jovens e adultos (EJA). O Censo Escolar coleta dados sobre estabelecimentos, matrículas, funções docentes, movimento e rendimento escolar.
+
+  Essas informações são utilizadas para traçar um panorama nacional da educação básica e servem de referência para a formulação de políticas públicas e execução de programas na área da educação, incluindo os de transferência de recursos públicos como merenda e transporte escolar, distribuição de livros e uniformes, implantação de bibliotecas, instalação de energia elétrica, Dinheiro Direto na Escola e Fundo de Manutenção e Desenvolvimento da Educação Básica e de Valorização dos Profissionais da Educação (Fundeb).
+
+  Além disso, os resultados obtidos no Censo Escolar sobre o rendimento (aprovação e reprovação) e movimento (abandono) escolar dos alunos do ensino Fundamental e Médio, juntamente com outras avaliações do Inep (Saeb e Prova Brasil), são utilizados para o cálculo do Índice de Desenvolvimento da Educação Básica (IDEB), indicador que serve de referência para as metas do Plano de Desenvolvimento da Educação (PDE), do Ministério da Educação.
+  
+  Iremos trabalhar com as informações das escolas do país, que estão no banco de dados 'Microdados Censo Escolar 2017' disponibilidado por Marcelo Pacote na plataforma Kaggle, disponível através do link: https://www.kaggle.com/marcelopacote/microdados-censo-escolar-2017/version/1.
+
+
+```{r, message = FALSE, warning = FALSE}
+#Baixando se não tiver o pacote e carregando os pacotes que serão utilizados
+lista_de_pacotes <- c("readr","stringr", "dplyr", "tidyr", "ggplot2", "lubridate","knitr")
+n_pacotes <- lista_de_pacotes[!(lista_de_pacotes %in% installed.packages()[,"Package"])]
+if(length(n_pacotes)) install.packages(n_pacotes)
+
+library(readr)
+library(stringr)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(lubridate)
+```
+
+
+A tabela `ESCOLAS.CSV` contém informações sobre as escolas cadrastadas no censo 2017 no Brasil:
+[ESCOLAS.CSV](https://drive.google.com/file/d/1Fj61PWZs1VCBT3t3fPWidmCHAzRNvAvk/view?usp=sharing)
+
+
+## Proposta de análise: Como está o funcionamento das escolas no país em diferentes dependências administrativas?
+
+  Iremos dividir nossa análise em 4 etapas, dadas da seguinte forma:
+
+1. Relação do número de salas de aula existentes e utilizadas nas escolas por dependência administrativa
+2. Relação do numero de funcionários das escolas por dependência administrativa
+3. Recursos relacionados à infraestrutura
+4. Relação do destino do lixo das escolas (reciclagem) por localização (rural/urbana)
+5. Relação do abastecimento de água por localização (rural/urbana)
+
+
+#Leitura dos dados 
+```{r, message = FALSE}
+
+#importação da tabela
+
+escolas <- read_delim("ESCOLAS.CSV", delim ="|")
+
+#verificando a estrutura dos dados
+
+paste("Classe:", class(escolas)[2],
+      "   Variáveis:", length(escolas),
+      "   Observações:", nrow(escolas))
+```
+
+#Manipulação e limpeza dos dados
+```{r}
+
+#Escolha de algumas colunas que serão analisadas
+
+escolas_selecao <- 
+  escolas %>%
+  select(c(TP_DEPENDENCIA, TP_LOCALIZACAO, NU_SALAS_EXISTENTES, NU_SALAS_UTILIZADAS, 
+           NU_FUNCIONARIOS, NU_COMPUTADOR, IN_SALA_DIRETORIA,IN_SALA_PROFESSOR,
+           IN_BIBLIOTECA_SALA_LEITURA, IN_AREA_VERDE, IN_LABORATORIO_INFORMATICA, 
+           IN_LABORATORIO_CIENCIAS, IN_AGUA_REDE_PUBLICA,IN_AGUA_INEXISTENTE,
+           IN_LIXO_COLETA_PERIODICA, IN_LIXO_QUEIMA, IN_AGUA_POCO_ARTESIANO,
+           IN_AGUA_CACIMBA, IN_AGUA_FONTE_RIO, IN_LIXO_ENTERRA, IN_LIXO_OUTROS, 
+           IN_LIXO_JOGA_OUTRA_AREA,IN_LIXO_RECICLA)) 
+```
+
+Analisamos as variavéis da tabela escola e escolhemos estas variavéis para trabalharmos, 3 variavéis numéricas e o restante variavéis categóricas, esta escolha foi feita devido ao banco de dados *ESCOLAS.CSV* ter muitas variavéis categóricas e poucas variavéis numéricas para análise. 
+
+```{r}
+glimpse(escolas_selecao, n = 5)
+```
+
+
+```{r}
+
+# Função que auxilia na mudança de varias variavéis para melhor compreensão dos dados 
+
+lookup <- function(x, table) {
+    table[as.character(x)]
+} 
+
+# Mudanca das variaveis TP_DEPENDENCIA E TP_SITUACAO_FUNCIONAMENTO
+# Transformação das variaveis que começam com IN E TP em factor
+
+escolas_selecao <- escolas_selecao %>%
+  mutate(TP_DEPENDENCIA = lookup(TP_DEPENDENCIA, c("1" = "Federal", "2" ="Estadual", 
+                                                   "3" = "Municipal", "4" = "Privada")),
+         TP_LOCALIZACAO = lookup(TP_LOCALIZACAO, c("1" = "Urbana","2" = "Rural"))) %>%
+  mutate_at(vars(starts_with("IN")), as.factor) %>%
+  mutate_at(vars(starts_with("TP")), as.factor)
+
+```
+
+Manipulamos os dados que estavam desorganizados com o pacote *dplyr* para melhor compreensão.
+
+```{r}
+glimpse(escolas_selecao, n = 10)
+```
+
+
+#Analises estatísticas dos dados numéricos
+```{r}
+#Calculo das medias das variaveis numéricas
+Medias <- escolas_selecao %>% 
+  na.omit(escolas_selecao[4:7]) %>% 
+  group_by(TP_DEPENDENCIA) %>%
+  summarize(media_numero_de_salas = mean(NU_SALAS_EXISTENTES),
+            media_numero_de_salas_utilizadas = mean(NU_SALAS_UTILIZADAS),
+            media_numero_de_funcionarios = mean(NU_FUNCIONARIOS),
+            media_numero_de_computadores = mean(NU_COMPUTADOR)) 
+```
+
+
+```{r}
+#Estatísticas sumárias do banco de dados
+
+summary(escolas_selecao, na.rm = TRUE)
+```
+
+
+Observando as estatísticas sumárias das variavéis escolhidas, vemos a grande quantidade de valores `NA` que a tabela tem, nos mostrando que a coleta dos dados está com vários valores faltantes que podem interferir nos cálculos. Com a média das variavéis `NU_SALAS_EXISTENTES` e `NU_SALAS_UTILIZADAS` percebemos que as escolas, em média, possuem mais salas de aula do que utilizam. Analisando as variavéis `IN_LABORATORIO_INFORMATICA` e `IN_LABORATORIO_CIENCIAS` percebemos que existem poucos laboratórios de informática e de ciências nas escolas brasileiras, cerca de 40% e 11% (respectivamente) de escolas possuem esse tipo de infraestrutura. E com as varivéis `IN_LIXO_RECICLA` que as escolas brasileiras praticam bem pouco a reciclagem com o lixo de suas escolas, apenas 7%.
+
+```{r}
+Medias
+```
+
+
+As escolas federais possuem as maiores médias, nas escolas municipais a situação se inverte e nas escolas privadas e estaduais a média de salas utilizadas e existentes são as mais próximas. Além disso, apenas nas escolas federais a média da quantidade de computadores é maior que a média de funcionários.
+
+#Gráficos 
+
+## Relação do número de salas de aula existentes e utilizadas nas escolas por dependência administrativa
+
+```{r, message = FALSE, fig.align="center", fig.width=10}
+
+#colocando este tema para todos os gráficos
+
+theme_set(theme_minimal())
+
+#Grafico 1
+
+escolas_selecao %>%
+  na.omit(escolas_selecao[6:7]) %>% 
+  group_by(TP_DEPENDENCIA) %>%
+  ggplot(aes(x = NU_SALAS_EXISTENTES, y = NU_SALAS_UTILIZADAS, 
+             col = TP_DEPENDENCIA)) + 
+  geom_point(position = position_jitter(0.1), alpha = I(0.3)) +
+  facet_wrap(~TP_DEPENDENCIA) +
+  geom_smooth(method = "lm", se = FALSE, colour = "red", size = 0.4) +
+  geom_abline(intercept = 0, slope = 1, linetype = 2, alpha = 0.5) + 
+  scale_x_continuous(limits = c(0,1000)) +
+  scale_y_continuous(limits = c(0,1000)) +
+  scale_x_log10() +
+  scale_y_log10() +
+  labs(title = "Relação do número de salas de aula existentes por salas de aula utilizadas
+       \n dentro e fora da escola por dependência administrativa", 
+       x = "Número de salas existentes (log)", y = "Número de salas utilizadas (log)",
+       col = "Tipo de dependência") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+Aqui plotamos um gráfico log x log da relação do número de salas de aula existentes por salas de aula utilizadas dentro e fora da escola por dependência administrativa. Em vermelho, temos o ajuste linear dos pontos, e a linha preta tracejada representa a reta $y = x$, que implica em $salas$ $existentes = salas$ $utilizadas$.
+Um ponto estar abaixo da reta $y = x$ significa que a escola possui mais salas do que utiliza, e estar acima da reta implica que a escola necessita de mais salas de aula do que as que há nas dependências do colégio. 
+
+Podemos percebemos que, enquanto as escolas municipais possuem o ajuste linear mais próximo da reta $y=x$, são as escolas federais que têm pontos de maior acurácia com relação à reta $y=x$. Além disso, é possível afirmar que nas escolas federais o uso das salas de aula é mais organizado, sendo a maioria das salas existentes utilizadas dentro das próprias escolas. Nas escolas estaduais e municipais esse cenário já é o contrário, possuindo grande parcela das salas utilizadas fora da escola. Nas escolas privadas esse cenário já é um pouco melhor, mas possui um número grande de salas inutilizadas.
+
+
+##Relação do número de funcionários nas escolas por dependência administrativa
+```{r  fig.align="center", fig.width=10}
+
+#Grafico 2
+
+escolas_selecao %>% na.omit(escolas_selecao[c("TP_DEPENDENCIA","NU_FUNCIONARIOS")]) %>%
+  ggplot(aes(x = TP_DEPENDENCIA, y = NU_FUNCIONARIOS)) +
+  geom_violin() + 
+  geom_point(alpha = 0.2, size = 1, col = "red") + 
+  labs(title = "Relação do número de funcionários nas escolas por \n dependência administrativa") +
+  xlab("Dependência administrativa")+
+  ylab("Número de funcionários (log)") + 
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_y_log10() +
+  coord_flip()
+
+```
+
+
+Neste gráfico analisamos a relação do número (em log) de funcionários nas escolas por dependência administrativa. Os pontos possuem opacidade, então quanto mais forte é a cor, mais pontos estão localizados nessa área. Optamos por acrescentar o gráfico de violino, que é um gráfico de densidade espelhada exibido da mesma forma que um boxplot.
+
+A maior concentração de funcionários são nas escolas federais e estaduais. Também é perceptível que há muitos outliers no gráfico e todas as densidades possuem *tails* muito longos.
+
+## Recursos relacionados à infraestrutura
+```{r  fig.align="center", fig.width=10}
+
+#variaveis usadas no grafico 3
+
+topicos <- c("IN_SALA_DIRETORIA", "IN_SALA_PROFESSOR", "IN_BIBLIOTECA_SALA_LEITURA", "IN_AREA_VERDE", "IN_LABORATORIO_INFORMATICA", "IN_LABORATORIO_CIENCIAS")
+
+#mudança nas variaveis com dplyr para fazer o grafico 3
+
+escolas_selecao_IN <- escolas_selecao %>% 
+  select(topicos) %>% 
+  cbind(TP_DEPENDENCIA = escolas_selecao$TP_DEPENDENCIA) %>% 
+  gather(var, val, -"TP_DEPENDENCIA") %>%
+  group_by(TP_DEPENDENCIA, var) %>% 
+  summarize(total = sum(as.numeric(val), na.rm = TRUE),
+            n = n(),
+            freq = total/n())
+
+
+#Grafico 3
+
+ggplot(escolas_selecao_IN, aes(TP_DEPENDENCIA, total, fill = var)) +
+  geom_bar(stat = "identity", position = "fill") +
+  scale_y_continuous("Proporção") +
+  scale_x_discrete("Dependência administrativa") +
+  scale_fill_discrete(name = "Locais que a escola possui", 
+                      breaks = unique(escolas_selecao_IN$var),
+                      labels = c("Área verde", "Biblioteca/Sala de leitura", 
+                                 "Laboratório de Ciências", "Laboratório de Informática",
+                                 "Sala de diretoria", "Sala de professor")) + 
+  coord_flip() + 
+  labs(title = "Proporção de recursos de infraestrutura \n por dependência administrativa")  +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  geom_text(aes(label = paste0(100*round(freq, 2),"%")), size = 3, position = position_fill(vjust = .5)) + 
+  theme(axis.title.x=element_blank(), axis.text.x=element_blank(), axis.ticks.x=element_blank())
+```
+
+Neste gráfico é necessário estudar cada dependência administrativa separadamente. As porcentagens representam a quantidade de escolas que possuem aquele tipo de infraestrutura.
+
+Analisando o gráfico, percebemos que as escolas dão preferência à construção de salas para a diretoria, uma vez que é a infraestrutura cuja maioria das escolas possuem, em todos os tipos de dependência. Logo em seguida temos as salas de professores e bibliotecas ou salas de leitura. Vemos também que as escolas federais são as que mais possuem os diferentes tipos de locais, e as municipais as que menos possuem. Os investimentos em área verde e, principalmente, laboratório de Ciências são escassos em todas as dependências, menos a federal. Vale ressaltar que as escolas estaduais e federais apresentam um número alto de laboratório de informática, o que mostra o investimento na tecnologia.
+
+
+##  Relação do destino do lixo das escolas (reciclagem) por localização (rural/urbana)
+```{r  fig.align="center", fig.width=10}
+
+#variaveis usadas no grafico 4
+
+lixo <- c("IN_LIXO_COLETA_PERIODICA", "IN_LIXO_QUEIMA", "IN_LIXO_ENTERRA", "IN_LIXO_JOGA_OUTRA_AREA", "IN_LIXO_RECICLA")
+
+#mudança nas variaveis com dplyr para fazer o grafico 4
+
+escolas_selecao_lixo <- escolas_selecao %>% 
+  select(lixo) %>%
+  cbind("TP_LOCALIZACAO" = escolas_selecao$TP_LOCALIZACAO) %>%
+  gather(var, val, -"TP_LOCALIZACAO") %>% 
+  group_by(TP_LOCALIZACAO, var) %>%
+  summarize(total = sum(as.numeric(val), na.rm = TRUE),
+            n = n(),
+            freq = total/n())
+
+#Grafico 4
+
+ggplot(escolas_selecao_lixo, aes(TP_LOCALIZACAO, total, fill = var)) +
+  geom_bar(stat = "identity", position = "fill") +
+  scale_y_continuous("Proporção") +
+  scale_x_discrete("Localização da escola") +
+  scale_fill_discrete(name = "Destino do lixo", 
+                      breaks = unique(escolas_selecao_lixo$var),
+                      labels = c("Coleta periódica", "Enterra o lixo", 
+                                 "Joga em outra área", "Queima", "Recicla")) +
+  coord_flip()  +
+  labs(title = "Proporção de destino do lixo \n por locaização da escola") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+Neste gráfico é necessário estudar as proporçõeas de cada localização separadamente, uma vez que elas não estão na mesma escala. As proporções representam a quantidade de escolas que possuem aquele tipo destino de lixo.
+
+Nas escolas urbanas, a coleta periódica é a escolha predominante, enquanto que a queima, enterro ou jogar em outra área são as opções com as menores taxas, quase não significativas. Nas escolas rurais, vemos que o principal destino do lixo é a queima, o principal problema oriundo desse processo é a poluição do ar e, portanto, degradação do meio ambiente. A menor taxa é da reciclagem, método que també possui baixo índice nas escolas urbanas. Além disso, as escolas rurais encaminham seu lixo para enterro ou outras áreas numa parcela pequena, mas ainda significativa.
+
+
+## Relação com o abastecimento de água por localização (rural/urbana)
+```{r  fig.align="center", fig.width=10}
+
+#variaveis usadas no grafico 5
+
+agua <- c("IN_AGUA_POCO_ARTESIANO", "IN_AGUA_CACIMBA", "IN_AGUA_FONTE_RIO", "IN_AGUA_REDE_PUBLICA", "IN_AGUA_INEXISTENTE")
+
+#mudança nas variaveis com dplyr para fazer o grafico 5
+
+escolas_selecao_agua <- escolas_selecao %>% 
+  select(agua) %>% 
+  cbind("TP_LOCALIZACAO" = escolas_selecao$TP_LOCALIZACAO) %>%
+  gather(var, val, -"TP_LOCALIZACAO") %>% 
+  group_by(TP_LOCALIZACAO, var) %>% 
+  summarize(total = sum(as.numeric(val), na.rm = TRUE),
+            n = n(),
+            freq = total/n())                         
+
+#Grafico 5
+
+ggplot(escolas_selecao_agua, aes(TP_LOCALIZACAO, total, fill = var)) +
+  geom_bar(stat = "identity", position = "fill") +
+  scale_y_continuous("Proporção") +
+  scale_x_discrete("Localização da escola") +
+  scale_fill_discrete(name = "Tipo de abastecimento de água", 
+                      breaks = unique(escolas_selecao_agua$var),
+                      labels = c("Cacimba (poço)", "Fonte de rio", "Sem fonte de água",
+                                 "Poço artesiano", "Rede pública")) +
+  coord_flip() +
+  labs(title = "Proporção de tipo de abastecimento de água \n por locaização da escola") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+Neste gráfico é necessário estudar as proporçõeas de cada localização separadamente, uma vez que elas não estão na mesma escala. As proporções representam a quantidade de escolas que possuem aquele tipo de abastecimento de água.
+
+Em ambas as localizações a fonte principal de fornecimento de água é a rede pública, seguida dos poços artesianos. Um fator muito relevante é que um número grande de escolas rurais (cerca de 5%) não possuem nenhum tipo de abastecimento de água, o que sugere uma situação extremamente precária.
+
+#Bibliografia
+
+Tabela auxiliar do censo escolar 2017 que utilizamos para ver o significado das variavéis:
+https://drive.google.com/file/d/1I0Z8V3lmwycRAejmHQtnDETts4qb-G4s/view?usp=sharing
+
+#Considerações finais
+
+Pelos fatores analisados, organização e infraestrutura, o funcionamento das escolas federais é melhor do que as outras dependências administrativas, e as escolas municipais têm as piores condições. Percebemos que existem poucos laboratórios de informática e de ciências nas escolas brasileiras, cerca de 40% e 11% (respectivamente) de escolas possuem esse tipo de infraestrutura. Nas escolas privadas e estaduais a média de salas utilizadas e existentes são as mais próximas. Além disso, vimos que um número pequeno, mas significativo, de escolas rurais não possuem abastecimento de água, além de dependerem de um tipo de disposição de lixo que mais agride o meio ambiente. E, por fim, as escolas brasileiras praticam pouco a reciclagem com o lixo de suas escolas, apenas 7%. 
+
+
+
+
